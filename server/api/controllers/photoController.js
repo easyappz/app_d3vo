@@ -1,74 +1,84 @@
 const Photo = require('../../models/Photo');
 const User = require('../../models/User');
-const Rating = require('../../models/Rating');
+
+const POINTS_REQUIRED_FOR_EVALUATION = 10;
 
 exports.uploadPhoto = async (req, res) => {
   try {
-    const userId = req.user.userId;
-    const { title, genderFilter, ageFilter } = req.body;
-    const url = req.file ? `/uploads/${req.file.filename}` : '';
-    if (!url) {
-      return res.status(400).json({ error: 'No file uploaded' });
+    if (!req.file) {
+      return res.status(400).json({ message: 'No file uploaded' });
     }
-    const photo = new Photo({ userId, url, title, genderFilter, ageFilter });
+    const { title, genderFilter, ageFilter } = req.body;
+    const photo = new Photo({
+      title: title || 'Untitled',
+      filePath: req.file.path,
+      owner: req.userData.userId,
+      genderFilter: genderFilter || 'all',
+      ageFilter: ageFilter || 'all',
+      isEvaluatable: false
+    });
     await photo.save();
     res.status(201).json({ photo });
   } catch (error) {
-    res.status(500).json({ error: 'Photo upload failed: ' + error.message });
+    res.status(500).json({ message: 'Photo upload failed', error: error.message });
   }
 };
 
 exports.getPhotosForEvaluation = async (req, res) => {
   try {
-    const userId = req.user.userId;
+    const userId = req.userData.userId;
     const { gender, age } = req.query;
-    const user = await User.findById(userId);
-    let filter = { isEvaluatable: true, userId: { $ne: userId } };
+    const query = {
+      isEvaluatable: true,
+      owner: { $ne: userId }
+    };
     if (gender && gender !== 'all') {
-      filter.genderFilter = { $in: [gender, 'all'] };
+      query.genderFilter = { $in: [gender, 'all'] };
     }
     if (age && age !== 'all') {
-      filter.ageFilter = { $in: [age, 'all'] };
+      query.ageFilter = { $in: [age, 'all'] };
     }
-    const photos = await Photo.find(filter).populate('userId');
-    res.json({ photos });
+    const photos = await Photo.find(query).populate('owner');
+    res.status(200).json({ photos });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch photos for evaluation: ' + error.message });
+    res.status(500).json({ message: 'Failed to fetch photos', error: error.message });
   }
 };
 
 exports.addToEvaluatable = async (req, res) => {
   try {
-    const userId = req.user.userId;
     const { photoId } = req.body;
+    const userId = req.userData.userId;
     const user = await User.findById(userId);
-    if (user.points <= 0) {
-      return res.status(400).json({ error: 'Not enough points to add photo for evaluation' });
+    if (user.points < POINTS_REQUIRED_FOR_EVALUATION) {
+      return res.status(400).json({ message: 'Not enough points to add photo for evaluation' });
     }
-    const photo = await Photo.findOne({ _id: photoId, userId });
+    const photo = await Photo.findOne({ _id: photoId, owner: userId });
     if (!photo) {
-      return res.status(404).json({ error: 'Photo not found or not owned by user' });
+      return res.status(404).json({ message: 'Photo not found or not owned by user' });
     }
     photo.isEvaluatable = true;
+    user.points -= POINTS_REQUIRED_FOR_EVALUATION;
     await photo.save();
-    res.json({ message: 'Photo added to evaluatable list', photo });
+    await user.save();
+    res.status(200).json({ message: 'Photo added to evaluatable list', photo });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to add photo to evaluatable list: ' + error.message });
+    res.status(500).json({ message: 'Failed to add photo to evaluatable list', error: error.message });
   }
 };
 
 exports.removeFromEvaluatable = async (req, res) => {
   try {
-    const userId = req.user.userId;
     const { photoId } = req.body;
-    const photo = await Photo.findOne({ _id: photoId, userId });
+    const userId = req.userData.userId;
+    const photo = await Photo.findOne({ _id: photoId, owner: userId });
     if (!photo) {
-      return res.status(404).json({ error: 'Photo not found or not owned by user' });
+      return res.status(404).json({ message: 'Photo not found or not owned by user' });
     }
     photo.isEvaluatable = false;
     await photo.save();
-    res.json({ message: 'Photo removed from evaluatable list', photo });
+    res.status(200).json({ message: 'Photo removed from evaluatable list', photo });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to remove photo from evaluatable list: ' + error.message });
+    res.status(500).json({ message: 'Failed to remove photo from evaluatable list', error: error.message });
   }
 };

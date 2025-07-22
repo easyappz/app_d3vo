@@ -1,17 +1,17 @@
 const jwt = require('jsonwebtoken');
 
-const JWT_SECRET = 'mysecretkey123';
+const JWT_SECRET = 'mysecretkey';
 
 module.exports = (req, res, next) => {
   try {
-    const token = req.header('Authorization').replace('Bearer ', '');
+    const token = req.headers.authorization.split(' ')[1];
     if (!token) {
-      return res.status(401).json({ error: 'Authentication token missing' });
+      return res.status(401).json({ message: 'Authentication failed: No token provided' });
     }
     const decoded = jwt.verify(token, JWT_SECRET);
-    req.user = decoded;
+    req.userData = decoded;
     next();
   } catch (error) {
-    res.status(401).json({ error: 'Invalid token: ' + error.message });
+    return res.status(401).json({ message: 'Authentication failed: Invalid token', error: error.message });
   }
 };

@@ -1,0 +1,315 @@
+openapi: 3.0.0
+info:
+  title: Photo Rating API
+  version: 1.0.0
+paths:
+  /api/auth/register:
+    post:
+      summary: Register a new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                password:
+                  type: string
+                username:
+                  type: string
+                gender:
+                  type: string
+                  enum: [male, female, other]
+                age:
+                  type: number
+      responses:
+        '201':
+          description: User registered successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                  user:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      email:
+                        type: string
+                      username:
+                        type: string
+                      gender:
+                        type: string
+                      age:
+                        type: number
+                      points:
+                        type: number
+        '400':
+          description: Email already registered
+        '500':
+          description: Registration failed
+  /api/auth/login:
+    post:
+      summary: Login a user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                  user:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      email:
+                        type: string
+                      username:
+                        type: string
+                      gender:
+                        type: string
+                      age:
+                        type: number
+                      points:
+                        type: number
+        '400':
+          description: Invalid credentials
+        '500':
+          description: Login failed
+  /api/auth/forgot-password:
+    post:
+      summary: Request password reset
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+      responses:
+        '200':
+          description: Password reset token generated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  resetToken:
+                    type: string
+        '404':
+          description: User not found
+        '500':
+          description: Password reset failed
+  /api/auth/reset-password:
+    post:
+      summary: Reset password using token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                resetToken:
+                  type: string
+                newPassword:
+                  type: string
+      responses:
+        '200':
+          description: Password reset successful
+        '400':
+          description: Invalid or expired reset token
+        '500':
+          description: Password reset failed
+  /api/photos/upload:
+    post:
+      summary: Upload a photo
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                title:
+                  type: string
+                genderFilter:
+                  type: string
+                  enum: [male, female, other, all]
+                ageFilter:
+                  type: string
+                  enum: [under18, 18-25, 26-35, 36-50, over50, all]
+      responses:
+        '201':
+          description: Photo uploaded successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  photo:
+                    type: object
+        '400':
+          description: No file uploaded
+        '500':
+          description: Photo upload failed
+      security:
+        - bearerAuth: []
+  /api/photos/evaluate:
+    get:
+      summary: Get photos for evaluation
+      parameters:
+        - in: query
+          name: gender
+          schema:
+            type: string
+            enum: [male, female, other, all]
+        - in: query
+          name: age
+          schema:
+            type: string
+            enum: [under18, 18-25, 26-35, 36-50, over50, all]
+      responses:
+        '200':
+          description: List of photos for evaluation
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  photos:
+                    type: array
+                    items:
+                      type: object
+        '500':
+          description: Failed to fetch photos
+      security:
+        - bearerAuth: []
+  /api/photos/add-to-evaluatable:
+    post:
+      summary: Add photo to evaluatable list
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                photoId:
+                  type: string
+      responses:
+        '200':
+          description: Photo added to evaluatable list
+        '400':
+          description: Not enough points
+        '404':
+          description: Photo not found or not owned
+        '500':
+          description: Failed to add photo
+      security:
+        - bearerAuth: []
+  /api/photos/remove-from-evaluatable:
+    post:
+      summary: Remove photo from evaluatable list
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                photoId:
+                  type: string
+      responses:
+        '200':
+          description: Photo removed from evaluatable list
+        '404':
+          description: Photo not found or not owned
+        '500':
+          description: Failed to remove photo
+      security:
+        - bearerAuth: []
+  /api/ratings/rate:
+    post:
+      summary: Rate a photo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                photoId:
+                  type: string
+                score:
+                  type: number
+                  minimum: 1
+                  maximum: 5
+      responses:
+        '201':
+          description: Photo rated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  rating:
+                    type: object
+        '400':
+          description: Cannot rate own photo or already rated
+        '404':
+          description: Photo not found
+        '500':
+          description: Photo rating failed
+      security:
+        - bearerAuth: []
+  /api/ratings/statistics:
+    get:
+      summary: Get rating statistics for user's photos
+      responses:
+        '200':
+          description: Statistics fetched successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  statistics:
+                    type: object
+        '500':
+          description: Failed to fetch statistics
+      security:
+        - bearerAuth: []
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
